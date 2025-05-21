@@ -104,7 +104,8 @@ def create_pdf(df, kapitalziel=None):
 
     from io import BytesIO
     buffer = BytesIO()
-    pdf.output(buffer)
+    pdf_bytes = pdf.output(dest="S").encode("latin1")
+    buffer.write(pdf_bytes)
     buffer.seek(0)
     return buffer
 
@@ -142,7 +143,8 @@ def create_pdf(df, kapitalziel=None):
 
     from io import BytesIO
     buffer = BytesIO()
-    pdf.output(buffer)
+    pdf_bytes = pdf.output(dest="S").encode("latin1")
+    buffer.write(pdf_bytes)
     buffer.seek(0)
     return buffer
 
