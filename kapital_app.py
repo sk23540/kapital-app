@@ -71,8 +71,43 @@ st.download_button("📥 CSV herunterladen", data=csv, file_name='kapitalentwick
 from fpdf import FPDF
 import os
 
+from fpdf import FPDF
+import os
+
 def create_pdf(df, kapitalziel=None):
     pdf = FPDF()
+
+    # Lokale Schriftart einbinden
+    font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+    pdf.add_font("DejaVu", "", font_path, uni=True)
+    pdf.set_font("DejaVu", "", 12)
+
+    pdf.add_page()
+    pdf.cell(200, 10, txt="Kapitalentwicklung (Zinseszins)", ln=True, align='C')
+    if kapitalziel:
+        pdf.cell(200, 10, txt=f"Zielkapital: {kapitalziel:.2f} €", ln=True, align='C')
+    pdf.ln(10)
+
+    col_names = list(df.columns)
+    pdf.set_font("DejaVu", "", 10)
+    pdf.cell(30, 10, col_names[0], 1)
+    for col in col_names[1:]:
+        pdf.cell(50, 10, col, 1)
+    pdf.ln()
+
+    for i, row in df.tail(12).iterrows():
+        pdf.cell(30, 10, str(int(row['Monat'])), 1)
+        pdf.cell(50, 10, f"{row['Kapital (€)']:.2f}", 1)
+        if 'Kapital inflationsbereinigt (€)' in df.columns:
+            pdf.cell(50, 10, f"{row['Kapital inflationsbereinigt (€)']:.2f}", 1)
+        pdf.ln()
+
+    from io import BytesIO
+    buffer = BytesIO()
+    pdf.output(buffer)
+    buffer.seek(0)
+    return buffer
+
     
     # Schriftart hinzufügen (z. B. DejaVu Sans)
     font_path = "/tmp/DejaVuSans.ttf"
