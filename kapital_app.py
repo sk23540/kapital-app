@@ -1,154 +1,122 @@
-
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+from fpdf import FPDF
 from io import BytesIO
-from fpdf import FPDF
+import datetime
+import locale
 
-st.title("📈 Kapitalentwicklung mit Zinseszins")
+# Spracheinstellung
+language = st.selectbox("Sprache / Language", ["Deutsch", "English"])
 
-col1, col2 = st.columns(2)
-with col1:
-    startkapital = st.number_input("Startkapital (€)", min_value=0, value=1100)
-    jahresrendite = st.slider("Jährliche Rendite (%)", 0.0, 20.0, 5.0) / 100
-    laufzeit_jahre = st.slider("Anlagedauer (Jahre)", 1, 50, 10)
-with col2:
-    monatliche_einzahlung = st.number_input("Monatliche Einzahlung (€)", min_value=0, value=100)
-    inflation = st.slider("Inflation (%) jährlich", 0.0, 10.0, 2.0) / 100
-    gebuehren = st.slider("Rendite-Minderung durch Steuern/Gebühren (%)", 0.0, 10.0, 0.0) / 100
+TEXT = {
+    "Deutsch": {
+        "title": "Kapitalentwicklung mit Zinseszins",
+        "startkapital": "Startkapital (€)",
+        "monatsrendite": "Monatliche Rendite (%)",
+        "monate": "Anzahl Monate",
+        "inflation": "Inflation berücksichtigen (ca. 2 % p.a.)",
+        "download": "📄 PDF herunterladen",
+        "invalid_input": "Bitte gib gültige Werte ein.",
+        "kapital_in_euro": "Kapital in €",
+        "monat": "Monat",
+        "ziel_kapital": "Zielkapital nach {monate} Monaten: {kapital:.2f} €",
+        "szenario_titel": "Szenarienvergleich"
+    },
+    "English": {
+        "title": "Compound Interest Capital Growth",
+        "startkapital": "Starting Capital (€)",
+        "monatsrendite": "Monthly Return (%)",
+        "monate": "Number of Months",
+        "inflation": "Adjust for inflation (approx. 2% p.a.)",
+        "download": "📄 Download PDF",
+        "invalid_input": "Please enter valid values.",
+        "kapital_in_euro": "Capital in €",
+        "monat": "Month",
+        "ziel_kapital": "Target capital after {monate} months: {kapital:.2f} €",
+        "szenario_titel": "Scenario Comparison"
+    }
+}
+T = TEXT[language]
 
-zielkapital = st.number_input("🎯 Zielkapital (€) (optional)", min_value=0, value=20000)
-inflationsbereinigt = st.checkbox("Kapital inflationsbereinigt anzeigen", value=True)
+st.title(T["title"])
 
-effektive_rendite = jahresrendite - gebuehren
-monate = laufzeit_jahre * 12
-monatliche_rendite = (1 + effektive_rendite)**(1/12) - 1
+# Eingabefelder
+startkapital = st.number_input(T["startkapital"], min_value=0.0, value=1000.0, step=100.0)
+monatsrendite = st.number_input(T["monatsrendite"], min_value=0.0, max_value=100.0, value=27.27)
+monate = st.slider(T["monate"], min_value=1, max_value=100, value=12)
+inflation_anpassen = st.checkbox(T["inflation"])
 
-kapital = [startkapital]
-kapital_real = [startkapital] if inflationsbereinigt else None
-ziel_erreicht_monat = None
+# Rendite in Dezimal umrechnen
+monatsrendite /= 100
+inflationsrate = 0.00165 if inflation_anpassen else 0
 
-for monat in range(1, monate + 1):
-    neues_kapital = kapital[-1] * (1 + monatliche_rendite) + monatliche_einzahlung
-    kapital.append(neues_kapital)
-    if inflationsbereinigt:
-        inflationsfaktor = (1 + inflation)**(monat / 12)
-        kapital_real.append(neues_kapital / inflationsfaktor)
-    if ziel_erreicht_monat is None and neues_kapital >= zielkapital:
-        ziel_erreicht_monat = monat
+# Funktion zur Kapitalberechnung
+def berechne_kapital(start, rendite, monate, inflationsrate=0.0):
+    kapital = [start]
+    for i in range(1, monate + 1):
+        neues = kapital[-1] * (1 + rendite - inflationsrate)
+        kapital.append(neues)
+    return kapital
 
-if zielkapital > 0 and ziel_erreicht_monat:
-    jahre_erreicht = ziel_erreicht_monat // 12
-    monate_erreicht = ziel_erreicht_monat % 12
-    st.success(f"🎉 Ziel von {zielkapital:.0f} € erreicht nach {jahre_erreicht} Jahren und {monate_erreicht} Monaten.")
-elif zielkapital > 0:
-    st.info("📌 Zielkapital innerhalb des Zeitraums nicht erreicht.")
+# Hauptszenario
+kapitalentwicklung = berechne_kapital(startkapital, monatsrendite, monate, inflationsrate)
+monatsliste = list(range(0, monate + 1))
 
-st.subheader("📊 Kapitalentwicklung")
-fig, ax = plt.subplots(figsize=(10, 5))
-ax.plot(kapital, label="Kapital nominal (€)", color='green')
-if inflationsbereinigt:
-    ax.plot(kapital_real, label="Kapital inflationsbereinigt (€)", linestyle='--', color='orange')
-if ziel_erreicht_monat:
-    ax.axvline(ziel_erreicht_monat, color='blue', linestyle=':', label='Ziel erreicht')
-ax.set_xlabel("Monate")
-ax.set_ylabel("Kapital in €")
-ax.grid(True)
-ax.legend()
-st.pyplot(fig)
+# Szenarienvergleich
+szenarien = [0.10, 0.20, 0.2727]
+plt.figure(figsize=(10, 6))
+for r in szenarien:
+    daten = berechne_kapital(startkapital, r, monate, inflationsrate)
+    plt.plot(monatsliste, daten, marker='o', label=f"{round(r*100, 2)}%")
+plt.xlabel(T["monat"])
+plt.ylabel(T["kapital_in_euro"])
+plt.title(T["szenario_titel"])
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.savefig("chart.png")  # Für PDF später
 
-df = pd.DataFrame({'Monat': list(range(monate + 1)), 'Kapital (€)': kapital})
-if inflationsbereinigt:
-    df['Kapital inflationsbereinigt (€)'] = kapital_real
+# Tabelle anzeigen
+df = pd.DataFrame({
+    T["monat"]: monatsliste,
+    T["kapital_in_euro"]: [round(k, 2) for k in kapitalentwicklung]
+})
+st.line_chart(df.set_index(T["monat"]))
 
-st.subheader("📋 Tabelle (letzte 12 Monate)")
-st.dataframe(df.tail(12).reset_index(drop=True).style.format("{:.2f}"))
+zielkapital = kapitalentwicklung[-1]
+st.success(T["ziel_kapital"].format(monate=monate, kapital=zielkapital))
 
-st.subheader("📎 Tabelle als CSV herunterladen")
-csv = df.to_csv(index=False).encode('utf-8')
-st.download_button("📥 CSV herunterladen", data=csv, file_name='kapitalentwicklung.csv', mime='text/csv')
-
-from fpdf import FPDF
-import os
-
-from fpdf import FPDF
-import os
-
-def create_pdf(df, kapitalziel=None):
+# PDF-Export
+def create_pdf(df, zielkapital):
     pdf = FPDF()
-
-    # Lokale Schriftart einbinden
-    font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
-    pdf.add_font("DejaVu", "", font_path, uni=True)
-    pdf.set_font("DejaVu", "", 12)
-
     pdf.add_page()
-    pdf.cell(200, 10, txt="Kapitalentwicklung (Zinseszins)", ln=True, align='C')
-    if kapitalziel:
-        pdf.cell(200, 10, txt=f"Zielkapital: {kapitalziel:.2f} €", ln=True, align='C')
-    pdf.ln(10)
+    font_path = "DejaVuSans.ttf"
+    pdf.add_font("DejaVu", "", font_path, uni=True)
+    pdf.set_font("DejaVu", "", 14)
+    pdf.cell(200, 10, txt=T["title"], ln=True)
+    pdf.set_font("DejaVu", "", 12)
+    pdf.cell(200, 10, txt=T["ziel_kapital"].format(monate=monate, kapital=zielkapital), ln=True)
 
-    col_names = list(df.columns)
-    pdf.set_font("DejaVu", "", 10)
-    pdf.cell(30, 10, col_names[0], 1)
-    for col in col_names[1:]:
-        pdf.cell(50, 10, col, 1)
-    pdf.ln()
+    pdf.image("chart.png", x=10, y=30, w=180)
 
-    for i, row in df.tail(12).iterrows():
-        pdf.cell(30, 10, str(int(row['Monat'])), 1)
-        pdf.cell(50, 10, f"{row['Kapital (€)']:.2f}", 1)
-        if 'Kapital inflationsbereinigt (€)' in df.columns:
-            pdf.cell(50, 10, f"{row['Kapital inflationsbereinigt (€)']:.2f}", 1)
-        pdf.ln()
+    pdf.ln(85)
+    for index, row in df.iterrows():
+        pdf.cell(100, 8, f"{T['monat']} {row[T['monat']]}: {row[T['kapital_in_euro']]} €", ln=True)
 
-    from io import BytesIO
     buffer = BytesIO()
     pdf_bytes = pdf.output(dest="S").encode("latin1")
     buffer.write(pdf_bytes)
     buffer.seek(0)
     return buffer
 
-    
-    # Schriftart hinzufügen (z. B. DejaVu Sans)
-    font_path = "/tmp/DejaVuSans.ttf"
-    if not os.path.exists(font_path):
-        import requests
-        r = requests.get("https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf")
-        with open(font_path, "wb") as f:
-            f.write(r.content)
-
-    pdf.add_font("DejaVu", "", font_path, uni=True)
-    pdf.set_font("DejaVu", "", 12)
-
-    pdf.add_page()
-    pdf.cell(200, 10, txt="Kapitalentwicklung (Zinseszins)", ln=True, align='C')
-    if kapitalziel:
-        pdf.cell(200, 10, txt=f"Zielkapital: {kapitalziel:.2f} €", ln=True, align='C')
-    pdf.ln(10)
-
-    col_names = list(df.columns)
-    pdf.set_font("DejaVu", "", 10)
-    pdf.cell(30, 10, col_names[0], 1)
-    for col in col_names[1:]:
-        pdf.cell(50, 10, col, 1)
-    pdf.ln()
-
-    for i, row in df.tail(12).iterrows():
-        pdf.cell(30, 10, str(int(row['Monat'])), 1)
-        pdf.cell(50, 10, f"{row['Kapital (€)']:.2f}", 1)
-        if 'Kapital inflationsbereinigt (€)' in df.columns:
-            pdf.cell(50, 10, f"{row['Kapital inflationsbereinigt (€)']:.2f}", 1)
-        pdf.ln()
-
-    from io import BytesIO
-    buffer = BytesIO()
-    pdf_bytes = pdf.output(dest="S").encode("latin1")
-    buffer.write(pdf_bytes)
-    buffer.seek(0)
-    return buffer
-
-
-st.subheader("📄 Bericht als PDF herunterladen")
 pdf_buffer = create_pdf(df, zielkapital)
-st.download_button("📤 PDF herunterladen", data=pdf_buffer, file_name="kapitalbericht.pdf", mime="application/pdf")
+
+# Download-Button
+dateiname = f"Kapitalentwicklung_M{monate}.pdf"
+st.download_button(
+    label=T["download"],
+    data=pdf_buffer,
+    file_name=dateiname,
+    mime="application/pdf"
+)
